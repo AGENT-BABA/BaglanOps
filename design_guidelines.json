@@ -1,0 +1,114 @@
+{
+  "typography": {
+    "headings": {
+      "fontFamily": "'Outfit', sans-serif",
+      "weights": ["500", "700"],
+      "usage": "Use tight letter spacing (tracking-tight) for all headings above 32px. Use for dashboard titles, card headers, and North Star metrics.",
+      "forbidden": ["Inter", "Roboto", "Space Grotesk"]
+    },
+    "body": {
+      "fontFamily": "'IBM Plex Sans', sans-serif",
+      "weights": ["400", "500", "600"],
+      "usage": "Clean, highly legible monospace-adjacent font for data tables, ticket logs, and technical status descriptions."
+    },
+    "labels": {
+      "style": "Uppercase, tracking-[0.2em], text-xs to text-sm, font-semibold",
+      "usage": "Use for overlines, status tags, table column headers, and small metadata."
+    }
+  },
+  "colors": {
+    "theme_strategy": "High-Contrast Tactical / Swiss Brutalist. Supports both Light and Dark mode. Dark mode must feel like a command center.",
+    "light": {
+      "background": "#F8FAFC",
+      "surface": "#FFFFFF",
+      "text_primary": "#0F172A",
+      "text_secondary": "#475569",
+      "primary": "#0047AB",
+      "border": "#E2E8F0",
+      "status_working": "#10B981",
+      "status_warning": "#F59E0B",
+      "status_critical": "#E11D48"
+    },
+    "dark": {
+      "background": "#020617",
+      "surface": "#0F172A",
+      "text_primary": "#F8FAFC",
+      "text_secondary": "#94A3B8",
+      "primary": "#3B82F6",
+      "border": "#1E293B",
+      "status_working": "#34D399",
+      "status_warning": "#FBBF24",
+      "status_critical": "#FB7185"
+    },
+    "usage_rules": [
+      "NEVER use generic full-screen gradients.",
+      "NEVER rely purely on color for status. Always pair a status color (e.g., Red) with a text label (e.g., 'Wire Cut' or 'Critical') or icon.",
+      "Use 1px borders to separate surfaces instead of heavy shadows (Grid Borders Technical Look)."
+    ]
+  },
+  "visual enhancers": {
+    "borders": "1px solid border (border-border) on cards, tables, and widgets. Exposed grid skeleton style for admin dashboard.",
+    "shadows": "Minimal. Use shadow-sm for interactive elements. Avoid large blurry drop-shadows. Focus on 'Tactical Minimalism'.",
+    "glassmorphism": "Use for floating navigation or sticky headers only. Apply backdrop-blur-xl with a 1px delicate inner stroke.",
+    "textures": "Subtle noise overlay (opacity 2-3%) on the dark mode background to reduce digital flatness.",
+    "shapes": "Sharp corners or minimal border-radius (max 8px / rounded-md) to reinforce the technical/professional nature."
+  },
+  "component name": {
+    "tables": "Shadcn Table. Use sticky headers, row heights of 48-52px. Hover state on rows.",
+    "status_badges": "Shadcn Badge. Flat background with colored text (e.g., bg-emerald-500/10 text-emerald-500).",
+    "forms": "Shadcn Form, Input, Textarea, Select. For reporting issues and feedback.",
+    "notifications": "Sonner (Toasts) for restoration alerts and new ticket pings.",
+    "cards": "Shadcn Card. Flattened, 1px border, no shadow unless hovered.",
+    "tabs": "Shadcn Tabs. Used to switch between 'All Routers', 'Active Issues', 'Resolved'. Override default h-9 to h-auto.",
+    "charts": "Recharts via Shadcn Chart components for uptime, resolution time metrics."
+  },
+  "grids": {
+    "admin_dashboard": "High Density Grid. grid-cols-1 md:grid-cols-3 lg:grid-cols-4. Gap-6. Top row for North Star KPIs (col-span-1 each). Map/Topology spanning col-span-2 or 3.",
+    "user_dashboard": "Bento Grid Mode B. Focused on 'Current Status' (large card, col-span-full md:col-span-2) and 'Recent Tickets' (col-span-full md:col-span-1)."
+  },
+  "layouts": {
+    "app_shell_admin": "Left Collapsible Sidebar (240px wide) + Top Header (sticky, with Notification Bell and Theme Toggle) + Main Content Area.",
+    "app_shell_user": "Top Navigation Bar (Crystal Glassmorphism) + Centered Main Content Area (max-w-5xl).",
+    "spacing": "Generous inner padding. Use p-6 or p-8 inside cards. Gap-6 between grid items.",
+    "f_pattern": "Place the most critical metric (Active Wire Cuts / Critical Issues) at the top-left of the admin dashboard."
+  },
+  "motion": {
+    "loading": "Skeleton screens for router data and ticket lists (no spinners).",
+    "interactions": "Hover states on table rows and buttons must lift slightly (-translate-y-[1px]) or change background color.",
+    "transitions": "Use specific transition classes (transition-colors duration-200, transition-transform) NEVER transition-all.",
+    "lists": "Staggered entrance animations for router items and tickets using framer-motion."
+  },
+  "accessibility": {
+    "contrast": "Ensure all text meets APCA standards. Status badges must have high contrast text against their tinted backgrounds.",
+    "motion_preference": "Respect prefers-reduced-motion for all framer-motion animations.",
+    "testing": "All interactive elements (buttons, tabs, table rows, form inputs) MUST include a data-testid attribute in kebab-case."
+  },
+  "media": {
+    "icons": "lucide-react. Ensure icons are paired with text for status indicators (e.g., AlertTriangle for wire cuts).",
+    "images": "Use professional server room backgrounds for the login page to establish corporate ISP context."
+  },
+  "3d libraries and steps": {
+    "recommendation": "Use react-force-graph-2d for mapping the 2000 client routers if a topology view is built. Otherwise, rely on Recharts for data density.",
+    "installation": "yarn add recharts lucide-react framer-motion clsx tailwind-merge",
+    "usage": "If utilizing react-force-graph-2d, nodes should be colored based on status (Green/Red/Yellow). Set background to transparent to blend with UI."
+  },
+  "image urls per category and definition": {
+    "login_background": {
+      "url": "https://images.pexels.com/photos/37730212/pexels-photo-37730212.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "description": "Server racks in dark room. Use as background for the Demo Login page with a heavy dark gradient overlay (bg-black/60) to ensure text contrast."
+    },
+    "hero_network_abstract": {
+      "url": "https://images.pexels.com/photos/17485657/pexels-photo-17485657.png",
+      "description": "Abstract network visualization. Can be used as a subtle background header image for the User Portal."
+    },
+    "admin_avatar": {
+      "url": "https://images.pexels.com/photos/10657877/pexels-photo-10657877.jpeg",
+      "description": "Professional man in suit. Use for the Admin/Dealer profile picture."
+    },
+    "user_avatar": {
+      "url": "https://images.pexels.com/photos/12396627/pexels-photo-12396627.jpeg",
+      "description": "Professional woman in formal attire. Use for the generic Client/User profile picture."
+    }
+  },
+  "UNIVERSAL GUIDELINES FOR MAIN AGENT": "Do not center align layouts globally. Avoid generic rounded SaaS aesthetics; use sharp corners (rounded-md max) and 1px borders to mimic a technical control center. Implement robust Dark/Light mode support. Use glassmorphism only for sticky headers, never for data cards. Embed `data-testid` on all interactable elements. Build a responsive left-sidebar for Admin and a clean top-nav for Users. Prioritize high-density data tables over large empty cards for the Admin view. Do not use transition-all. Use pure Tailwind for layout structures, and Shadcn for complex interactables."
+}

@@ -1,0 +1,155 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+    margin: 0;
+    font-family: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+}
+
+code, .font-mono {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+}
+
+.font-display {
+    font-family: "Outfit", system-ui, sans-serif;
+    letter-spacing: -0.02em;
+}
+
+.font-label {
+    font-family: "IBM Plex Sans", sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    font-weight: 600;
+}
+
+@layer base {
+    :root {
+        /* Light — Swiss brutalist / paper */
+        --background: 210 20% 98%;
+        --foreground: 222 47% 8%;
+        --card: 0 0% 100%;
+        --card-foreground: 222 47% 8%;
+        --popover: 0 0% 100%;
+        --popover-foreground: 222 47% 8%;
+        --primary: 217 100% 34%;
+        --primary-foreground: 0 0% 100%;
+        --secondary: 215 25% 94%;
+        --secondary-foreground: 222 47% 11%;
+        --muted: 215 25% 94%;
+        --muted-foreground: 215 15% 45%;
+        --accent: 215 25% 94%;
+        --accent-foreground: 222 47% 11%;
+        --destructive: 348 83% 47%;
+        --destructive-foreground: 0 0% 100%;
+        --border: 215 20% 88%;
+        --input: 215 20% 88%;
+        --ring: 217 100% 34%;
+        --radius: 0.375rem;
+
+        --success: 160 84% 39%;
+        --warning: 38 92% 50%;
+        --danger: 348 83% 47%;
+
+        --chart-1: 217 100% 34%;
+        --chart-2: 160 84% 39%;
+        --chart-3: 38 92% 50%;
+        --chart-4: 348 83% 47%;
+        --chart-5: 260 60% 55%;
+    }
+    .dark {
+        /* Dark — command center */
+        --background: 222 47% 4%;
+        --foreground: 210 40% 98%;
+        --card: 222 47% 8%;
+        --card-foreground: 210 40% 98%;
+        --popover: 222 47% 8%;
+        --popover-foreground: 210 40% 98%;
+        --primary: 217 91% 60%;
+        --primary-foreground: 222 47% 8%;
+        --secondary: 217 33% 15%;
+        --secondary-foreground: 210 40% 98%;
+        --muted: 217 33% 12%;
+        --muted-foreground: 215 20% 65%;
+        --accent: 217 33% 15%;
+        --accent-foreground: 210 40% 98%;
+        --destructive: 351 95% 71%;
+        --destructive-foreground: 222 47% 8%;
+        --border: 217 33% 15%;
+        --input: 217 33% 15%;
+        --ring: 217 91% 60%;
+
+        --success: 158 64% 52%;
+        --warning: 43 96% 56%;
+        --danger: 351 95% 71%;
+
+        --chart-1: 217 91% 60%;
+        --chart-2: 158 64% 52%;
+        --chart-3: 43 96% 56%;
+        --chart-4: 351 95% 71%;
+        --chart-5: 262 83% 68%;
+    }
+}
+
+@layer base {
+    * {
+        @apply border-border;
+    }
+    body {
+        @apply bg-background text-foreground;
+    }
+
+    /* Subtle grain overlay in dark mode */
+    .dark body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        opacity: 0.025;
+        z-index: 1;
+        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    }
+}
+
+/* Status dot pulsing for offline routers */
+@keyframes pulse-danger {
+    0%, 100% { box-shadow: 0 0 0 0 hsl(var(--danger) / 0.6); }
+    50%      { box-shadow: 0 0 0 6px hsl(var(--danger) / 0); }
+}
+.pulse-danger { animation: pulse-danger 1.6s ease-in-out infinite; }
+
+@keyframes pulse-warning {
+    0%, 100% { box-shadow: 0 0 0 0 hsl(var(--warning) / 0.6); }
+    50%      { box-shadow: 0 0 0 6px hsl(var(--warning) / 0); }
+}
+.pulse-warning { animation: pulse-warning 2s ease-in-out infinite; }
+
+/* Grid skeleton texture on admin backgrounds */
+.grid-skeleton {
+    background-image:
+        linear-gradient(hsl(var(--border) / 0.4) 1px, transparent 1px),
+        linear-gradient(90deg, hsl(var(--border) / 0.4) 1px, transparent 1px);
+    background-size: 48px 48px;
+}
+
+/* Sticky header glass */
+.glass {
+    backdrop-filter: blur(16px);
+    background-color: hsl(var(--background) / 0.72);
+    border-bottom: 1px solid hsl(var(--border));
+}
+
+/* Row hover lift */
+.row-hover:hover {
+    transform: translateY(-1px);
+    transition: transform 200ms ease, background-color 200ms ease;
+}
+
+/* No transition-all — target specific properties instead */
+.tx-colors { transition: color 200ms, background-color 200ms, border-color 200ms; }
+.tx-transform { transition: transform 200ms; }
+
+::selection { background: hsl(var(--primary) / 0.25); color: hsl(var(--foreground)); }
