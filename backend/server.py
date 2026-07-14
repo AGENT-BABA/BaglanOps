@@ -342,6 +342,29 @@ async def admin_audit_logs(limit: int = Query(50, ge=1, le=200), _: dict = Depen
     return logs
 
 
+@api.get("/admin/daily-reports")
+async def admin_daily_reports(
+    router_id: Optional[str] = Query(None),
+    days: int = Query(7, ge=1, le=30),
+    _: dict = Depends(require_role("admin")),
+):
+    """Get daily health reports. Optional filter by router_id."""
+    q = {}
+    if router_id:
+        q["router_id"] = router_id
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d")
+    q["date"] = {"$gte": cutoff}
+    reports = await db.daily_reports.find(q, {"_id": 0}).sort("date", -1).limit(200).to_list(length=200)
+    return reports
+
+
+@api.get("/admin/daily-reports/{date}")
+async def admin_daily_report_by_date(date: str, _: dict = Depends(require_role("admin"))):
+    """Get all router reports for a specific date (YYYY-MM-DD)."""
+    reports = await db.daily_reports.find({"date": date}, {"_id": 0}).to_list(length=200)
+    return reports
+
+
 @api.get("/admin/analytics")
 async def admin_analytics(_: dict = Depends(require_role("admin"))):
     # Get all dealers in one query
@@ -1244,6 +1267,8 @@ async def ensure_indexes():
         await db.routers.create_index([("router_id", 1)], background=True, unique=True)
         await db.audit_logs.create_index([("timestamp", -1)], background=True)
         await db.audit_logs.create_index([("user_id", 1)], background=True)
+        await db.daily_reports.create_index([("router_id", 1), ("date", -1)], background=True)
+        await db.daily_reports.create_index([("date", -1)], background=True)
         log.info("Database indexes ensured")
     except Exception as e:
         log.error(f"Index creation error: {e}")

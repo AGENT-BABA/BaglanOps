@@ -387,11 +387,56 @@ async def check_single_router(db, router_id: str) -> dict:
 
 _health_task = None
 
+
+async def consolidate_daily_reports(db):
+    """Aggregate yesterday's health logs into daily_reports collection."""
+    yesterday_start = (datetime.now(timezone.utc) - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+    yesterday_end = yesterday_start + timedelta(days=1)
+
+    pipeline = [
+        {"$match": {"checked_at": {"$gte": yesterday_start.isoformat(), "$lt": yesterday_end.isoformat()}}},
+        {"$group": {
+            "_id": "$router_id",
+            "checks": {"$sum": 1},
+            "up_count": {"$sum": {"$cond": [{"$eq": ["$status", "up"]}, 1, 0]}},
+            "down_count": {"$sum": {"$cond": [{"$eq": ["$status", "down"]}, 1, 0]}},
+            "avg_latency": {"$avg": "$latency_ms"},
+            "min_latency": {"$min": "$latency_ms"},
+            "max_latency": {"$max": "$latency_ms"},
+        }},
+    ]
+
+    results = await db.health_logs.aggregate(pipeline).to_list(length=500)
+    date_str = yesterday_start.strftime("%Y-%m-%d")
+
+    for r in results:
+        report = {
+            "router_id": r["_id"],
+            "date": date_str,
+            "total_checks": r["checks"],
+            "up_count": r["up_count"],
+            "down_count": r["down_count"],
+            "uptime_pct": round(r["up_count"] / r["checks"] * 100, 2) if r["checks"] else 0,
+            "avg_latency_ms": round(r["avg_latency"], 2) if r["avg_latency"] else None,
+            "min_latency_ms": r["min_latency"],
+            "max_latency_ms": r["max_latency"],
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        await db.daily_reports.update_one(
+            {"router_id": r["_id"], "date": date_str},
+            {"$set": report},
+            upsert=True,
+        )
+
+    log.info(f"Daily reports consolidated for {date_str}: {len(results)} routers")
+
+
 async def health_check_scheduler(db):
-    """Background task: run health checks every 10 minutes, cleanup daily."""
+    """Background task: run health checks every 10 minutes, cleanup and report daily."""
     global _health_task
     log.info("Health check scheduler started (interval: 600s)")
     cleanup_hour = 0
+    report_hour = 1  # generate daily report at 01:00 UTC
     while True:
         await asyncio.sleep(600)
         try:
@@ -399,6 +444,8 @@ async def health_check_scheduler(db):
             current_hour = datetime.now(timezone.utc).hour
             if current_hour == cleanup_hour:
                 await cleanup_old_health_logs(db)
+            if current_hour == report_hour:
+                await consolidate_daily_reports(db)
         except Exception as e:
             log.error(f"Health check scheduler error: {e}")
 
