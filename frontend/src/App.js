@@ -9,6 +9,7 @@ import AdminLayout from "@/pages/AdminLayout";
 import AdminOverview from "@/pages/AdminOverview";
 import AdminDealers from "@/pages/AdminDealers";
 import AdminClients from "@/pages/AdminClients";
+import AdminSettings from "@/pages/AdminSettings";
 import DealerLayout from "@/pages/DealerLayout";
 import DealerOverview from "@/pages/DealerOverview";
 import DealerTickets from "@/pages/DealerTickets";
@@ -54,6 +55,7 @@ function App() {
               <Route index element={<AdminOverview />} />
               <Route path="dealers" element={<AdminDealers />} />
               <Route path="clients" element={<AdminClients />} />
+              <Route path="settings" element={<AdminSettings />} />
             </Route>
 
             <Route path="/dealer" element={<ProtectedRoute role="dealer"><DealerLayout /></ProtectedRoute>}>

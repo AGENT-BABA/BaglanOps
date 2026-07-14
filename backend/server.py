@@ -22,6 +22,12 @@ from backend.router_monitor import (
     check_router_health, save_health_log, update_router_snapshot,
     run_health_checks, check_single_router, start_health_scheduler,
 )
+from backend.mikrotik import (
+    test_connection, get_pppoe_sessions, get_pppoe_secrets,
+    get_profiles, get_interfaces, get_dhcp_leases, get_simple_queues,
+    disconnect_client, enable_disable_client, change_client_profile,
+    get_client_usage,
+)
 
 # ---------------- Config ----------------
 JWT_SECRET = os.environ.get("JWT_SECRET")
@@ -32,6 +38,40 @@ JWT_EXPIRE_MIN = 60 * 24
 
 client = AsyncIOMotorClient(os.environ["MONGO_URL"])
 db = client[os.environ["DB_NAME"]]
+
+# ---------------- Encryption ----------------
+ENCRYPTION_KEY = os.environ.get("ENCRYPTION_KEY", "")
+_fernet = None
+
+def _get_fernet():
+    global _fernet
+    if _fernet is None:
+        if not ENCRYPTION_KEY:
+            raise RuntimeError("ENCRYPTION_KEY must be set in .env")
+        from cryptography.fernet import Fernet
+        _fernet = Fernet(ENCRYPTION_KEY.encode())
+    return _fernet
+
+def encrypt_secret(plain: str) -> str:
+    return _get_fernet().encrypt(plain.encode()).decode()
+
+def decrypt_secret(cipher: str) -> str:
+    return _get_fernet().decrypt(cipher.encode()).decode()
+
+# ---------------- Audit Log ----------------
+async def log_action(user: dict, action: str, detail: str = "", request: Request = None, success: bool = True):
+    doc = {
+        "id": str(uuid.uuid4()),
+        "user_id": user.get("id", ""),
+        "user_name": user.get("name", user.get("email", "unknown")),
+        "user_role": user.get("role", ""),
+        "action": action,
+        "detail": detail,
+        "ip_address": request.client.host if request else "",
+        "success": success,
+        "timestamp": now_iso(),
+    }
+    await db.audit_logs.insert_one(doc)
 
 app = FastAPI(title="NetOps Dealer Portal v2")
 api = APIRouter(prefix="/api")
@@ -209,6 +249,14 @@ class CreateRouterIn(BaseModel):
     lng: Optional[float] = None
 
 
+class MikroTikConfigIn(BaseModel):
+    host: str  # Router IP e.g. "192.168.88.1"
+    port: int = 8729  # API-SSL port
+    username: str  # Dedicated API user (not admin)
+    password: str
+    use_ssl: bool = True
+
+
 # ---------------- Auth ----------------
 async def current_user(request: Request) -> dict:
     auth = request.headers.get("Authorization", "")
@@ -287,6 +335,13 @@ async def me(user: dict = Depends(current_user)):
 
 
 # ---------------- Admin (System-wide) ----------------
+@api.get("/admin/audit-logs")
+async def admin_audit_logs(limit: int = Query(50, ge=1, le=200), _: dict = Depends(require_role("admin"))):
+    """Get recent audit logs."""
+    logs = await db.audit_logs.find({}, {"_id": 0}).sort("timestamp", -1).limit(limit).to_list(length=limit)
+    return logs
+
+
 @api.get("/admin/analytics")
 async def admin_analytics(_: dict = Depends(require_role("admin"))):
     # Get all dealers in one query
@@ -476,14 +531,27 @@ async def admin_dealer_workers(dealer_id: str, _: dict = Depends(require_role("a
 
 @api.get("/admin/system-stats")
 async def admin_system_stats(_: dict = Depends(require_role("admin"))):
-    return {
+    stats = {
         "total_dealers": await db.users.count_documents({"role": "dealer"}),
         "total_workers": await db.users.count_documents({"role": "worker"}),
         "total_clients": await db.users.count_documents({"role": "user"}),
         "total_routers": await db.routers.count_documents({}),
         "open_tickets": await db.tickets.count_documents({"status": {"$in": ["open", "assigned", "in_progress"]}}),
         "resolved_tickets": await db.tickets.count_documents({"status": {"$in": ["resolved", "closed"]}}),
+        "pppoe_sessions": 0,
+        "mikrotik_online": False,
     }
+    # Try to get live PPPoE session count from MikroTik
+    try:
+        host, port, username, password, use_ssl = await _get_mikrotik_config()
+        sessions = await get_pppoe_sessions(host, port, username, password, use_ssl)
+        stats["pppoe_sessions"] = len(sessions)
+        stats["mikrotik_online"] = True
+    except HTTPException:
+        stats["mikrotik_online"] = False
+    except Exception:
+        stats["mikrotik_online"] = False
+    return stats
 
 
 @api.get("/admin/clients/unassigned")
@@ -522,6 +590,127 @@ async def admin_assign_client(client_id: str, body: AssignClientIn, _: dict = De
         "read": False, "created_at": now_iso(),
     })
     return {"ok": True}
+
+
+# ---------------- MikroTik ----------------
+async def _get_mikrotik_config():
+    """Get MikroTik config with decrypted password. Returns (host, port, username, password, use_ssl) or raises."""
+    config = await db.mikrotik_config.find_one({}, {"_id": 0})
+    if not config:
+        raise HTTPException(400, "MikroTik not configured. Save config first.")
+    password = decrypt_secret(config.get("password_encrypted", ""))
+    return config["host"], config["port"], config["username"], password, config.get("use_ssl", True)
+@api.post("/admin/mikrotik/config")
+async def save_mikrotik_config(body: MikroTikConfigIn, request: Request, user: dict = Depends(require_role("admin"))):
+    """Save MikroTik CCR connection config."""
+    config = {
+        "host": body.host,
+        "port": body.port,
+        "username": body.username,
+        "password_encrypted": encrypt_secret(body.password),
+        "use_ssl": body.use_ssl,
+        "updated_at": now_iso(),
+    }
+    await db.mikrotik_config.update_one({}, {"$set": config}, upsert=True)
+    await log_action(user, "mikrotik_config_save", f"Host: {body.host}:{body.port}", request)
+    return {"ok": True, "message": "MikroTik config saved"}
+
+
+@api.get("/admin/mikrotik/config")
+async def get_mikrotik_config(_: dict = Depends(require_role("admin"))):
+    """Get MikroTik config (password masked)."""
+    config = await db.mikrotik_config.find_one({}, {"_id": 0})
+    if not config:
+        return {"configured": False}
+    config.pop("password_encrypted", None)
+    config["password"] = "***"
+    config["configured"] = True
+    return config
+
+
+@api.get("/admin/mikrotik/test")
+async def test_mikrotik_connection(request: Request, user: dict = Depends(require_role("admin"))):
+    """Test connection to MikroTik CCR."""
+    host, port, username, password, use_ssl = await _get_mikrotik_config()
+    result = await test_connection(host, port, username, password, use_ssl)
+    await log_action(user, "mikrotik_test", f"Host: {host}:{port}, Success: {result.get('connected')}", request)
+    return result
+
+
+@api.get("/admin/mikrotik/sessions")
+async def list_pppoe_sessions(_: dict = Depends(require_role("admin"))):
+    """Get all active PPPoE sessions from MikroTik CCR."""
+    host, port, username, password, use_ssl = await _get_mikrotik_config()
+    sessions = await get_pppoe_sessions(host, port, username, password, use_ssl)
+    return {"sessions": sessions, "total": len(sessions)}
+
+
+@api.get("/admin/mikrotik/secrets")
+async def list_pppoe_secrets(_: dict = Depends(require_role("admin"))):
+    """Get all configured PPPoE users from MikroTik CCR."""
+    host, port, username, password, use_ssl = await _get_mikrotik_config()
+    secrets = await get_pppoe_secrets(host, port, username, password, use_ssl)
+    return {"secrets": secrets, "total": len(secrets)}
+
+
+@api.get("/admin/mikrotik/profiles")
+async def list_pppoe_profiles(_: dict = Depends(require_role("admin"))):
+    """Get all PPPoE profiles from MikroTik CCR."""
+    host, port, username, password, use_ssl = await _get_mikrotik_config()
+    profiles = await get_profiles(host, port, username, password, use_ssl)
+    return {"profiles": profiles}
+
+
+@api.get("/admin/mikrotik/interfaces")
+async def list_interfaces(_: dict = Depends(require_role("admin"))):
+    """Get all interfaces with traffic stats from MikroTik CCR."""
+    host, port, username, password, use_ssl = await _get_mikrotik_config()
+    interfaces = await get_interfaces(host, port, username, password, use_ssl)
+    return {"interfaces": interfaces}
+
+
+@api.get("/admin/mikrotik/queues")
+async def list_queues(_: dict = Depends(require_role("admin"))):
+    """Get all simple queues (bandwidth limits) from MikroTik CCR."""
+    host, port, username, password, use_ssl = await _get_mikrotik_config()
+    queues = await get_simple_queues(host, port, username, password, use_ssl)
+    return {"queues": queues}
+
+
+@api.get("/admin/mikrotik/usage")
+async def client_usage(_: dict = Depends(require_role("admin"))):
+    """Get traffic usage per active PPPoE session."""
+    host, port, username, password, use_ssl = await _get_mikrotik_config()
+    usage = await get_client_usage(host, port, username, password, use_ssl)
+    return {"usage": usage}
+
+
+@api.post("/admin/mikrotik/disconnect/{session_id}")
+async def admin_disconnect_client(session_id: str, request: Request, user: dict = Depends(require_role("admin"))):
+    """Disconnect an active PPPoE session."""
+    host, port, username, password, use_ssl = await _get_mikrotik_config()
+    result = await disconnect_client(host, port, username, password, session_id, use_ssl)
+    await log_action(user, "mikrotik_disconnect", f"Session: {session_id}", request, result.get("success", False))
+    return result
+
+
+@api.post("/admin/mikrotik/toggle-user/{secret_id}")
+async def admin_toggle_client(secret_id: str, disabled: bool = True, request: Request = None, user: dict = Depends(require_role("admin"))):
+    """Enable or disable a PPPoE user."""
+    host, port, username, password, use_ssl = await _get_mikrotik_config()
+    result = await enable_disable_client(host, port, username, password, secret_id, disabled, use_ssl)
+    action = "disable" if disabled else "enable"
+    await log_action(user, f"mikrotik_{action}", f"User: {secret_id}", request, result.get("success", False))
+    return result
+
+
+@api.post("/admin/mikrotik/change-profile/{secret_id}")
+async def admin_change_profile(secret_id: str, new_profile: str, request: Request, user: dict = Depends(require_role("admin"))):
+    """Change PPPoE profile for a client."""
+    host, port, username, password, use_ssl = await _get_mikrotik_config()
+    result = await change_client_profile(host, port, username, password, secret_id, new_profile, use_ssl)
+    await log_action(user, "mikrotik_change_profile", f"User: {secret_id}, Profile: {new_profile}", request, result.get("success", False))
+    return result
 
 
 # ---------------- Dealer ----------------
@@ -1053,6 +1242,8 @@ async def ensure_indexes():
         await db.routers.create_index([("user_id", 1)], background=True)
         await db.routers.create_index([("dealer_id", 1)], background=True)
         await db.routers.create_index([("router_id", 1)], background=True, unique=True)
+        await db.audit_logs.create_index([("timestamp", -1)], background=True)
+        await db.audit_logs.create_index([("user_id", 1)], background=True)
         log.info("Database indexes ensured")
     except Exception as e:
         log.error(f"Index creation error: {e}")

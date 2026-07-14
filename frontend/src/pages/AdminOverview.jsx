@@ -7,7 +7,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import {
-  Users, Wrench, Building2, Router as RouterIcon, AlertOctagon, CheckCircle2, MapPin,
+  Users, Wrench, Building2, Router as RouterIcon, AlertOctagon, CheckCircle2, MapPin, Wifi, WifiOff,
 } from "lucide-react";
 import { toast } from "sonner";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
@@ -16,9 +16,9 @@ const KPI = [
   { key: "total_dealers", label: "DEALERS", icon: Building2, tone: "text-primary" },
   { key: "total_workers", label: "WORKERS", icon: Wrench, tone: "text-emerald-500" },
   { key: "total_clients", label: "CLIENTS", icon: Users, tone: "text-primary" },
+  { key: "pppoe_sessions", label: "PPPOE SESSIONS", icon: Wifi, tone: "text-cyan-500" },
   { key: "total_routers", label: "ROUTERS", icon: RouterIcon, tone: "text-primary" },
   { key: "open_tickets", label: "OPEN TICKETS", icon: AlertOctagon, tone: "text-rose-500" },
-  { key: "resolved_tickets", label: "RESOLVED", icon: CheckCircle2, tone: "text-emerald-500" },
 ];
 
 export default function AdminOverview() {
@@ -77,6 +77,23 @@ export default function AdminOverview() {
           </Card>
         ))}
       </div>
+
+      {/* MikroTik Status */}
+      {!loading && stats && (
+        <div className="flex items-center gap-2 text-xs">
+          {stats.mikrotik_online ? (
+            <>
+              <Wifi className="h-3.5 w-3.5 text-emerald-500" />
+              <span className="text-emerald-500 font-medium">MikroTik CCR: Online</span>
+            </>
+          ) : (
+            <>
+              <WifiOff className="h-3.5 w-3.5 text-muted-foreground" />
+              <span className="text-muted-foreground">MikroTik CCR: Not configured or offline</span>
+            </>
+          )}
+        </div>
+      )}
 
       {/* Dealer performance */}
       <Card className="border-border">
