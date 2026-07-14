@@ -20,13 +20,14 @@ from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, Field, EmailStr
 import asyncio
+import io
 from backend.router_monitor import (
     check_router_health, save_health_log, update_router_snapshot,
     run_health_checks, check_single_router, start_health_scheduler,
 )
 from backend.mikrotik import (
     test_connection, get_pppoe_sessions, get_pppoe_secrets,
-    get_profiles, get_interfaces, get_dhcp_leases, get_simple_queues,
+    get_profiles, get_interfaces, get_simple_queues,
     disconnect_client, enable_disable_client, change_client_profile,
     get_client_usage,
 )
@@ -221,6 +222,10 @@ class TicketDeleteIn(BaseModel):
 
 class AssignClientIn(BaseModel):
     dealer_id: str
+
+
+class AssignRouterIn(BaseModel):
+    pppoe_username: str
 
 
 class RegisterRouterIn(BaseModel):
@@ -797,6 +802,185 @@ async def admin_assign_client(client_id: str, body: AssignClientIn, _: dict = De
     return {"ok": True}
 
 
+# ---------------- Admin: PPPoE Assignment ----------------
+@api.get("/admin/pppoe-users")
+async def admin_pppoe_users(_: dict = Depends(require_role("admin"))):
+    """Get all PPPoE users from MikroTik, with assignment status."""
+    host, port, username, password, use_ssl = await _get_mikrotik_config()
+    secrets = await get_pppoe_secrets(host, port, username, password, use_ssl)
+
+    assigned_usernames = set()
+    assigned_docs = await db.routers.find(
+        {"pppoe_username": {"$ne": None, "$ne": ""}},
+        {"_id": 0, "pppoe_username": 1}
+    ).to_list(length=5000)
+    for doc in assigned_docs:
+        assigned_usernames.add(doc.get("pppoe_username", ""))
+
+    result = []
+    for s in secrets:
+        result.append({
+            **s,
+            "assigned": s["name"] in assigned_usernames,
+        })
+    return {"users": result, "total": len(result)}
+
+
+@api.post("/admin/assign-router")
+async def admin_assign_router(body: AssignRouterIn, request: Request, user: dict = Depends(require_role("admin"))):
+    """Assign a PPPoE user to a client. Creates a router record."""
+    client_user = await db.users.find_one({"id": body.pppoe_username}, {"_id": 1})
+    if not client_user:
+        pass  # pppoe_username is the MikroTik secret name, not user id
+
+    # Validate PPPoE username exists on MikroTik
+    host, port, username, password, use_ssl = await _get_mikrotik_config()
+    secrets = await get_pppoe_secrets(host, port, username, password, use_ssl)
+    secret = next((s for s in secrets if s["name"] == body.pppoe_username), None)
+    if not secret:
+        raise HTTPException(404, f"PPPoE user '{body.pppoe_username}' not found on MikroTik")
+
+    # Check if already assigned
+    existing = await db.routers.find_one({"pppoe_username": body.pppoe_username})
+    if existing:
+        raise HTTPException(400, f"PPPoE user '{body.pppoe_username}' is already assigned to a client")
+
+    return {"secret": secret, "ok": True}
+
+
+@api.post("/admin/assign-router/confirm")
+async def admin_assign_router_confirm(body: dict, request: Request, user: dict = Depends(require_role("admin"))):
+    """Confirm PPPoE assignment — creates the router record."""
+    client_id = body.get("client_id")
+    pppoe_username = body.get("pppoe_username")
+
+    if not client_id or not pppoe_username:
+        raise HTTPException(400, "client_id and pppoe_username required")
+
+    client = await db.users.find_one({"id": client_id, "role": "user"})
+    if not client:
+        raise HTTPException(404, "Client not found")
+
+    # Check not already assigned
+    existing = await db.routers.find_one({"pppoe_username": pppoe_username})
+    if existing:
+        raise HTTPException(400, f"PPPoE user '{pppoe_username}' is already assigned")
+
+    # Check client doesn't already have a router
+    client_has_router = await db.routers.find_one({"user_id": client_id})
+    if client_has_router:
+        raise HTTPException(400, "Client already has a router assigned")
+
+    # Get PPPoE details from MikroTik
+    host, port, username, password, use_ssl = await _get_mikrotik_config()
+    secrets = await get_pppoe_secrets(host, port, username, password, use_ssl)
+    secret = next((s for s in secrets if s["name"] == pppoe_username), None)
+    if not secret:
+        raise HTTPException(404, f"PPPoE user '{pppoe_username}' not found on MikroTik")
+
+    # Get live session data if online
+    sessions = await get_pppoe_sessions(host, port, username, password, use_ssl)
+    session = next((s for s in sessions if s["name"] == pppoe_username), None)
+
+    rid = f"RTR-{uuid.uuid4().hex[:8].upper()}"
+    now = now_iso()
+    router_doc = {
+        "id": str(uuid.uuid4()),
+        "router_id": rid,
+        "user_id": client_id,
+        "dealer_id": client.get("dealer_id"),
+        "client_name": client["name"],
+        "pppoe_username": pppoe_username,
+        "pppoe_profile": secret.get("profile", "default"),
+        "pppoe_ip": session["address"] if session else None,
+        "status": "online" if session else "offline",
+        "health_status": "online" if session else "offline",
+        "signal": None,
+        "usage_in": session.get("bytes_in", 0) if session else 0,
+        "usage_out": session.get("bytes_out", 0) if session else 0,
+        "uptime": session.get("uptime", "0s") if session else "0s",
+        "last_check": now,
+        "created_at": now,
+    }
+    await db.routers.insert_one(router_doc)
+
+    # Notify client
+    await db.notifications.insert_one({
+        "id": str(uuid.uuid4()),
+        "user_id": client_id,
+        "ticket_id": None,
+        "type": "router_assigned",
+        "title": "Router Assigned",
+        "message": f"Admin has assigned your internet connection ({pppoe_username}).",
+        "read": False,
+        "created_at": now,
+    })
+
+    await log_action(user, "assign_router", f"Client: {client['name']}, PPPoE: {pppoe_username}", request)
+    return {"ok": True, "router_id": rid}
+
+
+@api.delete("/admin/unassign-router/{router_id}")
+async def admin_unassign_router(router_id: str, request: Request, user: dict = Depends(require_role("admin"))):
+    """Remove PPPoE assignment from a client."""
+    router = await db.routers.find_one({"router_id": router_id})
+    if not router:
+        raise HTTPException(404, "Router not found")
+
+    client_id = router.get("user_id")
+    pppoe_username = router.get("pppoe_username", router_id)
+
+    await db.routers.delete_one({"router_id": router_id})
+    await db.router_health.delete_many({"router_id": router_id})
+
+    if client_id:
+        await db.notifications.insert_one({
+            "id": str(uuid.uuid4()),
+            "user_id": client_id,
+            "ticket_id": None,
+            "type": "router_unassigned",
+            "title": "Router Removed",
+            "message": f"Admin has removed your internet connection ({pppoe_username}).",
+            "read": False,
+            "created_at": now_iso(),
+        })
+
+    await log_action(user, "unassign_router", f"Router: {router_id}, PPPoE: {pppoe_username}", request)
+    return {"ok": True, "deleted": router_id}
+
+
+@api.get("/admin/clients/all")
+async def admin_all_clients(_: dict = Depends(require_role("admin"))):
+    """Get ALL clients (not just unassigned)."""
+    clients = await db.users.find(
+        {"role": "user"},
+        {"_id": 0, "password_hash": 0},
+    ).to_list(length=1000)
+
+    # Attach router info
+    client_ids = [c["id"] for c in clients]
+    routers = await db.routers.find(
+        {"user_id": {"$in": client_ids}},
+        {"_id": 0, "router_id": 1, "user_id": 1, "pppoe_username": 1, "status": 1, "health_status": 1}
+    ).to_list(length=1000)
+    router_map = {r["user_id"]: r for r in routers}
+
+    for c in clients:
+        r = router_map.get(c["id"])
+        if r:
+            c["router_assigned"] = True
+            c["router_id"] = r["router_id"]
+            c["pppoe_username"] = r.get("pppoe_username")
+            c["router_status"] = r.get("health_status") or r.get("status", "unknown")
+        else:
+            c["router_assigned"] = False
+            c["router_id"] = None
+            c["pppoe_username"] = None
+            c["router_status"] = None
+
+    return clients
+
+
 # ---------------- MikroTik ----------------
 async def _get_mikrotik_config():
     """Get MikroTik config with decrypted password. Returns (host, port, username, password, use_ssl) or raises."""
@@ -1036,15 +1220,7 @@ async def dealer_create_client(body: CreateClientIn, user: dict = Depends(requir
         "role": "user", "phone": body.phone, "address": body.address, "lat": body.lat, "lng": body.lng,
         "dealer_id": user["id"], "active": True, "created_at": now_iso(),
     })
-    rid = f"RTR-{uuid.uuid4().hex[:8].upper()}"
-    await db.routers.insert_one({
-        "id": str(uuid.uuid4()), "router_id": rid, "user_id": uid, "dealer_id": user["id"],
-        "client_name": body.name, "location": body.address, "lat": body.lat, "lng": body.lng,
-        "model": random.choice(["TP-Link AX55", "Netgear RAX50", "D-Link DIR-3060"]),
-        "status": "online", "signal": random.randint(85, 99),
-        "last_ping": now_iso(), "issue_type": None, "created_at": now_iso(),
-    })
-    return {"id": uid, "email": email, "router_id": rid}
+    return {"id": uid, "email": email}
 
 
 # ---------------- Worker ----------------
@@ -1097,7 +1273,42 @@ async def worker_complete(ticket_id: str, user: dict = Depends(require_role("wor
 # ---------------- User (Client) ----------------
 @api.get("/user/routers")
 async def user_routers(user: dict = Depends(require_role("user"))):
-    return await db.routers.find({"user_id": user["id"]}, {"_id": 0, "admin_password": 0}).to_list(length=50)
+    """Get user's routers with live PPPoE status from MikroTik."""
+    routers = await db.routers.find({"user_id": user["id"]}, {"_id": 0, "admin_password": 0}).to_list(length=50)
+
+    if not routers:
+        return []
+
+    # Try to get live PPPoE data from MikroTik
+    try:
+        host, port, username, password, use_ssl = await _get_mikrotik_config()
+        sessions = await get_pppoe_sessions(host, port, username, password, use_ssl)
+        usage_data = await get_client_usage(host, port, username, password, use_ssl)
+        session_map = {s["name"]: s for s in sessions}
+    except Exception:
+        session_map = {}
+        usage_data = {}
+
+    for r in routers:
+        pppoe_name = r.get("pppoe_username")
+        if pppoe_name and pppoe_name in session_map:
+            session = session_map[pppoe_name]
+            r["status"] = "online"
+            r["health_status"] = "online"
+            r["pppoe_ip"] = session.get("address")
+            r["pppoe_uptime"] = session.get("uptime")
+            r["usage_in"] = session.get("bytes_in", 0)
+            r["usage_out"] = session.get("bytes_out", 0)
+            r["last_check"] = now_iso()
+        elif pppoe_name:
+            r["status"] = "offline"
+            r["health_status"] = "offline"
+            r["pppoe_ip"] = r.get("pppoe_ip")
+            r["pppoe_uptime"] = "0s"
+            r["usage_in"] = r.get("usage_in", 0)
+            r["usage_out"] = r.get("usage_out", 0)
+
+    return routers
 
 
 @api.post("/user/routers")
@@ -1344,7 +1555,36 @@ async def user_check_router_now(router_id: str, user: dict = Depends(require_rol
     return result
 
 
-# Dealer: Health overview for all their routers
+# ---------------- Speed Test ----------------
+@api.get("/speedtest/ping")
+async def speedtest_ping():
+    """Simple ping endpoint for latency measurement."""
+    return {"timestamp": now_iso()}
+
+
+@api.get("/speedtest/test-file/{size}")
+async def speedtest_download(size: int):
+    """Serve test files for download speed test. Size in MB (1, 10, 50)."""
+    if size not in (1, 10, 50):
+        raise HTTPException(400, "Size must be 1, 10, or 50 MB")
+    # Generate random data of specified size
+    data = os.urandom(size * 1024 * 1024)
+    return StreamingResponse(
+        io.BytesIO(data),
+        media_type="application/octet-stream",
+        headers={"Content-Disposition": f'attachment; filename="speedtest-{size}mb.bin"'},
+    )
+
+
+@api.post("/speedtest/upload")
+async def speedtest_upload(request: Request):
+    """Receive uploaded test file for upload speed measurement."""
+    body = await request.body()
+    size_received = len(body)
+    return {"received": True, "bytes": size_received}
+
+
+# ---------------- Dealer: Health overview for all their routers ----------------
 @api.get("/dealer/routers/health/summary")
 async def dealer_routers_health_summary(user: dict = Depends(require_role("dealer"))):
     """Get health summary for all routers under this dealer."""

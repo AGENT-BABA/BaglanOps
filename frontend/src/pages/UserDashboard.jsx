@@ -15,9 +15,18 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { StatusPill } from "@/components/StatusPill";
-import { Signal, MapPin, AlertTriangle, TicketPlus, Pencil } from "lucide-react";
+import { AlertTriangle, TicketPlus, Zap, Wifi, WifiOff, Clock, ArrowDown, ArrowUp, Gauge } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
+import SpeedTest from "@/components/SpeedTest";
+
+function formatBytes(bytes) {
+  if (!bytes || bytes === 0) return "0 B";
+  if (bytes < 1024) return bytes + " B";
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+  if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+  return (bytes / (1024 * 1024 * 1024)).toFixed(1) + " GB";
+}
 
 export default function UserDashboard() {
   const { user } = useAuth();
@@ -29,6 +38,7 @@ export default function UserDashboard() {
   const [issueType, setIssueType] = useState("wire_cut");
   const [desc, setDesc] = useState("");
   const [busy, setBusy] = useState(false);
+  const [speedTestOpen, setSpeedTestOpen] = useState(false);
 
   const load = async () => {
     try {
@@ -86,60 +96,70 @@ export default function UserDashboard() {
             Real-time view of your internet connection. Report issues to your dealer with one click.
           </p>
         </div>
-        <Dialog open={reportOpen} onOpenChange={setReportOpen}>
-          <DialogTrigger asChild>
-            <Button className="gap-2" data-testid="report-issue-btn" onClick={() => openReport()}>
-              <TicketPlus className="h-4 w-4" /> Report Issue
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-xl">
-            <DialogHeader>
-              <DialogTitle>Report a connection issue</DialogTitle>
-              <DialogDescription>Your dealer will be notified immediately.</DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-2">
-              <div className="grid gap-1.5">
-                <Label className="font-label text-[10px]">ROUTER</Label>
-                <Select value={selectedRouter} onValueChange={setSelectedRouter}>
-                  <SelectTrigger data-testid="report-router-select"><SelectValue placeholder="Select router" /></SelectTrigger>
-                  <SelectContent>
-                    {routers.map((r) => (
-                      <SelectItem key={r.router_id} value={r.router_id} className="max-w-full">
-                        <span className="block max-w-[420px] truncate">{r.router_id} · {r.location}</span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid gap-1.5">
-                <Label className="font-label text-[10px]">ISSUE TYPE</Label>
-                <Select value={issueType} onValueChange={setIssueType}>
-                  <SelectTrigger data-testid="report-issue-type"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="wire_cut">Wire cut / cable damaged</SelectItem>
-                    <SelectItem value="no_signal">No internet signal</SelectItem>
-                    <SelectItem value="slow_speed">Very slow speed</SelectItem>
-                    <SelectItem value="outage">Complete outage</SelectItem>
-                    <SelectItem value="other">Other</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid gap-1.5">
-                <Label className="font-label text-[10px]">DESCRIPTION (OPTIONAL)</Label>
-                <Textarea data-testid="report-desc-input" value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Add any details for the technician…" />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setReportOpen(false)}>Cancel</Button>
-              <Button data-testid="report-submit-btn" disabled={busy || !selectedRouter} onClick={submitReport}>
-                {busy ? "Submitting…" : "Submit report"}
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            className="gap-2"
+            onClick={() => setSpeedTestOpen(true)}
+            data-testid="speed-test-btn"
+          >
+            <Zap className="h-4 w-4" /> Test Speed
+          </Button>
+          <Dialog open={reportOpen} onOpenChange={setReportOpen}>
+            <DialogTrigger asChild>
+              <Button className="gap-2" data-testid="report-issue-btn" onClick={() => openReport()}>
+                <TicketPlus className="h-4 w-4" /> Report Issue
               </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-xl">
+              <DialogHeader>
+                <DialogTitle>Report a connection issue</DialogTitle>
+                <DialogDescription>Your dealer will be notified immediately.</DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-2">
+                <div className="grid gap-1.5">
+                  <Label className="font-label text-[10px]">ROUTER</Label>
+                  <Select value={selectedRouter} onValueChange={setSelectedRouter}>
+                    <SelectTrigger data-testid="report-router-select"><SelectValue placeholder="Select router" /></SelectTrigger>
+                    <SelectContent>
+                      {routers.map((r) => (
+                        <SelectItem key={r.router_id} value={r.router_id} className="max-w-full">
+                          <span className="block max-w-[420px] truncate">{r.pppoe_username || r.router_id}</span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-1.5">
+                  <Label className="font-label text-[10px]">ISSUE TYPE</Label>
+                  <Select value={issueType} onValueChange={setIssueType}>
+                    <SelectTrigger data-testid="report-issue-type"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="wire_cut">Wire cut / cable damaged</SelectItem>
+                      <SelectItem value="no_signal">No internet signal</SelectItem>
+                      <SelectItem value="slow_speed">Very slow speed</SelectItem>
+                      <SelectItem value="outage">Complete outage</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-1.5">
+                  <Label className="font-label text-[10px]">DESCRIPTION (OPTIONAL)</Label>
+                  <Textarea data-testid="report-desc-input" value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Add any details for the technician…" />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setReportOpen(false)}>Cancel</Button>
+                <Button data-testid="report-submit-btn" disabled={busy || !selectedRouter} onClick={submitReport}>
+                  {busy ? "Submitting…" : "Submit report"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
-      {/* Routers grid */}
+      {/* PPPoE Connection cards */}
       <div className="grid gap-4 md:grid-cols-2">
         {loading &&
           Array.from({ length: 2 }).map((_, i) => (
@@ -150,65 +170,83 @@ export default function UserDashboard() {
             <CardHeader className="border-b border-border">
               <div className="flex items-center justify-between">
                 <div>
-                  <div className="font-label text-[9px] text-muted-foreground">ROUTER</div>
-                  <CardTitle className="font-mono text-base">{r.router_id}</CardTitle>
+                  <div className="font-label text-[9px] text-muted-foreground">CONNECTION</div>
+                  <CardTitle className="font-mono text-base">{r.pppoe_username || r.router_id}</CardTitle>
                 </div>
-                <StatusPill status={r.health_status || r.status} />
+                <div className="flex items-center gap-2">
+                  {r.status === "online" || r.health_status === "online" ? (
+                    <Wifi className="h-4 w-4 text-emerald-500" />
+                  ) : (
+                    <WifiOff className="h-4 w-4 text-rose-500" />
+                  )}
+                  <StatusPill status={r.health_status || r.status} />
+                </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-3 p-5">
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
-                  <div className="font-label text-[9px] text-muted-foreground">LOCATION</div>
-                  <div className="mt-1 inline-flex items-center gap-1">
-                    <MapPin className="h-3 w-3 text-muted-foreground" /> {r.location}
+                  <div className="font-label text-[9px] text-muted-foreground">PROFILE</div>
+                  <div className="mt-1 flex items-center gap-1">
+                    <Gauge className="h-3 w-3 text-muted-foreground" /> {r.pppoe_profile || "default"}
                   </div>
                 </div>
                 <div>
-                  <div className="font-label text-[9px] text-muted-foreground">SIGNAL</div>
-                  <div className="mt-1 inline-flex items-center gap-1 font-mono">
-                    <Signal className="h-3 w-3 text-muted-foreground" />
-                    {r.signal != null ? (
-                      <span className={r.signal > 60 ? "text-emerald-500" : r.signal > 30 ? "text-amber-500" : "text-rose-500"}>
-                        {r.signal}%
-                      </span>
+                  <div className="font-label text-[9px] text-muted-foreground">IP ADDRESS</div>
+                  <div className="mt-1 font-mono text-xs">{r.pppoe_ip || "—"}</div>
+                </div>
+                <div>
+                  <div className="font-label text-[9px] text-muted-foreground">UPTIME</div>
+                  <div className="mt-1 flex items-center gap-1 font-mono text-xs">
+                    <Clock className="h-3 w-3 text-muted-foreground" />
+                    {r.pppoe_uptime || "—"}
+                  </div>
+                </div>
+                <div>
+                  <div className="font-label text-[9px] text-muted-foreground">STATUS</div>
+                  <div className="mt-1">
+                    {(r.health_status || r.status) === "online" ? (
+                      <span className="inline-flex items-center gap-1 text-emerald-500 text-xs font-medium">● Online</span>
                     ) : (
-                      <span className="text-muted-foreground">N/A</span>
+                      <span className="inline-flex items-center gap-1 text-rose-500 text-xs font-medium">● Offline</span>
                     )}
                   </div>
                 </div>
+              </div>
+              {/* Usage */}
+              <div className="grid grid-cols-2 gap-4 text-sm border-t border-border pt-3">
                 <div>
-                  <div className="font-label text-[9px] text-muted-foreground">MODEL</div>
-                  <div className="mt-1 text-xs">{r.model}</div>
+                  <div className="font-label text-[9px] text-muted-foreground">DOWNLOADED</div>
+                  <div className="mt-1 flex items-center gap-1 font-mono text-xs">
+                    <ArrowDown className="h-3 w-3 text-emerald-500" />
+                    {formatBytes(r.usage_in)}
+                  </div>
                 </div>
                 <div>
-                  <div className="font-label text-[9px] text-muted-foreground">LAST CHECK</div>
-                  <div className="mt-1 font-mono text-[11px] text-muted-foreground">
-                    {r.last_health_check ? new Date(r.last_health_check).toLocaleTimeString() : "Never"}
+                  <div className="font-label text-[9px] text-muted-foreground">UPLOADED</div>
+                  <div className="mt-1 flex items-center gap-1 font-mono text-xs">
+                    <ArrowUp className="h-3 w-3 text-blue-500" />
+                    {formatBytes(r.usage_out)}
                   </div>
                 </div>
               </div>
               {(r.health_status || r.status) !== "online" && (
                 <div className="flex items-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs">
                   <AlertTriangle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
-                  Issue detected: <span className="font-semibold">{(r.issue_type || "unknown").replace("_", " ")}</span>
+                  Connection appears offline — possible wire cut or outage.
                 </div>
               )}
-              <div className="flex justify-end">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  asChild
-                  data-testid={`edit-btn-${r.router_id}`}
-                >
-                  <Link to={`/user/router-setup?router=${r.router_id}`} className="gap-1.5">
-                    <Pencil className="h-3.5 w-3.5" /> Edit
-                  </Link>
-                </Button>
-              </div>
             </CardContent>
           </Card>
         ))}
+        {!loading && routers.length === 0 && (
+          <Card className="border-border md:col-span-2">
+            <CardContent className="py-12 text-center">
+              <WifiOff className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
+              <p className="text-sm text-muted-foreground">No connection assigned yet. Contact your admin to get a router assigned.</p>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {/* Active tickets teaser */}
@@ -242,6 +280,13 @@ export default function UserDashboard() {
           )}
         </CardContent>
       </Card>
+
+      {/* Speed Test Dialog */}
+      <Dialog open={speedTestOpen} onOpenChange={setSpeedTestOpen}>
+        <DialogContent className="sm:max-w-md">
+          <SpeedTest onClose={() => setSpeedTestOpen(false)} />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

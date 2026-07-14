@@ -22,7 +22,6 @@ import WorkerTasks from "@/pages/WorkerTasks";
 import UserLayout from "@/pages/UserLayout";
 import UserDashboard from "@/pages/UserDashboard";
 import UserTickets from "@/pages/UserTickets";
-import RouterSetup from "@/pages/RouterSetup";
 
 function RootRedirect() {
   const { user, loading } = useAuth();
@@ -75,7 +74,6 @@ function App() {
             <Route path="/user" element={<ProtectedRoute role="user"><UserLayout /></ProtectedRoute>}>
               <Route index element={<UserDashboard />} />
               <Route path="tickets" element={<UserTickets />} />
-              <Route path="router-setup" element={<RouterSetup />} />
             </Route>
 
             <Route path="*" element={<Navigate to="/" replace />} />

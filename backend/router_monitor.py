@@ -375,6 +375,150 @@ async def run_health_checks(db):
     log.info(f"Health checks complete: {checked} checked, {errors} errors")
 
 
+async def run_pppoe_health_checks(db):
+    """Check PPPoE session status for all assigned routers via MikroTik."""
+    pppoe_routers = await db.routers.find(
+        {"pppoe_username": {"$ne": None, "$ne": ""}},
+        {"_id": 0}
+    ).to_list(length=2000)
+
+    if not pppoe_routers:
+        log.info("No PPPoE-assigned routers to check.")
+        return
+
+    # Get MikroTik config
+    try:
+        import os
+        from dotenv import load_dotenv
+        from pathlib import Path
+        load_dotenv(Path(__file__).parent / ".env")
+
+        from motor.motor_asyncio import AsyncIOMotorClient
+        mongo_client = AsyncIOMotorClient(os.environ["MONGO_URL"])
+        mongo_db = mongo_client[os.environ["DB_NAME"]]
+
+        config = await mongo_db.mikrotik_config.find_one({}, {"_id": 0})
+        if not config:
+            log.info("MikroTik not configured, skipping PPPoE checks.")
+            return
+
+        from cryptography.fernet import Fernet
+        encryption_key = os.environ.get("ENCRYPTION_KEY", "")
+        if not encryption_key:
+            log.warning("ENCRYPTION_KEY not set, cannot decrypt MikroTik password.")
+            return
+        fernet = Fernet(encryption_key.encode())
+        password = fernet.decrypt(config["password_encrypted"].encode()).decode()
+
+        host = config["host"]
+        port = config["port"]
+        username = config["username"]
+        use_ssl = config.get("use_ssl", True)
+    except Exception as e:
+        log.error(f"Failed to load MikroTik config for PPPoE checks: {e}")
+        return
+
+    # Fetch all active PPPoE sessions
+    try:
+        from backend.mikrotik import get_pppoe_sessions, get_client_usage
+        sessions = await get_pppoe_sessions(host, port, username, password, use_ssl)
+        session_map = {s["name"]: s for s in sessions}
+        usage_data = await get_client_usage(host, port, username, password, use_ssl)
+    except Exception as e:
+        log.error(f"Failed to fetch PPPoE sessions from MikroTik: {e}")
+        session_map = {}
+        usage_data = {}
+
+    now = datetime.now(timezone.utc)
+    checked = 0
+    status_changes = 0
+
+    for router in pppoe_routers:
+        pppoe_name = router.get("pppoe_username")
+        router_id = router.get("router_id")
+
+        if not pppoe_name:
+            continue
+
+        is_online = pppoe_name in session_map
+        session = session_map.get(pppoe_name, {})
+        old_status = router.get("health_status") or router.get("status", "unknown")
+        new_status = "online" if is_online else "offline"
+
+        # Update usage data
+        if pppoe_name in usage_data:
+            usage = usage_data[pppoe_name]
+            usage_in = usage.get("bytes_in", 0)
+            usage_out = usage.get("bytes_out", 0)
+            uptime = usage.get("uptime", "0s")
+        else:
+            usage_in = session.get("bytes_in", 0) if session else 0
+            usage_out = session.get("bytes_out", 0) if session else 0
+            uptime = session.get("uptime", "0s") if session else "0s"
+
+        update_fields = {
+            "health_status": new_status,
+            "status": new_status,
+            "pppoe_ip": session.get("address") if session else router.get("pppoe_ip"),
+            "pppoe_uptime": uptime,
+            "usage_in": usage_in,
+            "usage_out": usage_out,
+            "last_check": now.isoformat(),
+        }
+        if is_online:
+            update_fields["last_seen_online"] = now.isoformat()
+
+        await mongo_db.routers.update_one({"router_id": router_id}, {"$set": update_fields})
+
+        # Save health log
+        health_doc = {
+            "id": str(uuid.uuid4()),
+            "router_id": router_id,
+            "timestamp": now.isoformat(),
+            "status": new_status,
+            "wan_status": "connected" if is_online else "disconnected",
+            "wan_ip": session.get("address") if session else None,
+            "signal_strength": None,
+            "connected_devices": None,
+            "internet_uptime": uptime,
+            "usage_in": usage_in,
+            "usage_out": usage_out,
+            "error_message": None if is_online else "PPPoE session not found",
+        }
+        await mongo_db.router_health.insert_one(health_doc)
+
+        # Notify on status change
+        if old_status != new_status and new_status in ("offline",):
+            if router.get("dealer_id"):
+                await mongo_db.notifications.insert_one({
+                    "id": str(uuid.uuid4()),
+                    "user_id": router["dealer_id"],
+                    "ticket_id": None,
+                    "type": "router_alert",
+                    "title": f"Router OFFLINE",
+                    "message": f"PPPoE user {pppoe_name} ({router.get('client_name', 'Unknown')}) went offline. Possible wire cut.",
+                    "read": False,
+                    "created_at": now.isoformat(),
+                })
+            if router.get("user_id"):
+                await mongo_db.notifications.insert_one({
+                    "id": str(uuid.uuid4()),
+                    "user_id": router["user_id"],
+                    "ticket_id": None,
+                    "type": "connection_offline",
+                    "title": "Connection Offline",
+                    "message": f"Your internet connection ({pppoe_name}) is offline. If this persists, report an issue.",
+                    "read": False,
+                    "created_at": now.isoformat(),
+                })
+            status_changes += 1
+
+        checked += 1
+
+    mongo_client.close()
+    log.info(f"PPPoE health checks complete: {checked} checked, {status_changes} status changes")
+
+
 async def check_single_router(db, router_id: str) -> dict:
     """Check a single router on demand."""
     router = await db.routers.find_one({"router_id": router_id}, {"_id": 0})
@@ -452,6 +596,7 @@ async def health_check_scheduler(db):
         await asyncio.sleep(600)
         try:
             await run_health_checks(db)
+            await run_pppoe_health_checks(db)
             current_hour = datetime.now(timezone.utc).hour
             if current_hour == cleanup_hour:
                 await cleanup_old_health_logs(db)
