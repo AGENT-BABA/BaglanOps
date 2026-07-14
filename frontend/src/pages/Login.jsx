@@ -52,8 +52,8 @@ export default function Login() {
           lat: null, lng: null,
         });
         if (!res.ok) { setErr(res.error); return; }
-        toast.success(`Welcome, ${res.user.name} — let's set up your router`);
-        nav("/user/router-setup", { replace: true });
+        toast.success(`Welcome, ${res.user.name}`);
+        nav("/user", { replace: true });
       }
     } finally {
       setBusy(false);

@@ -11,7 +11,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Radio, Home, TicketCheck, Wifi, Bell, LogOut, ChevronDown } from "lucide-react";
+import { Radio, Home, TicketCheck, Bell, LogOut, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -99,16 +99,7 @@ export default function UserLayout() {
             >
               <TicketCheck className="h-3.5 w-3.5" /><span className="hidden sm:inline">My Tickets</span>
             </NavLink>
-            <NavLink
-              to="/user/router-setup"
-              data-testid="user-nav-router-setup"
-              className={({ isActive }) => cn(
-                "inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm tx-colors",
-                isActive ? "border-primary/30 bg-primary/10" : "border-transparent text-muted-foreground hover:bg-secondary"
-              )}
-            >
-              <Wifi className="h-3.5 w-3.5" /><span className="hidden sm:inline">Router Setup</span>
-            </NavLink>
+
           </nav>
           <div className="ml-auto flex items-center gap-2">
             <NotifyToggle />
