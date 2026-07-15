@@ -9,3 +9,4 @@ memory
 __pycache__
 .pytest_cache
 .emergent
+firebase-service-account.json
