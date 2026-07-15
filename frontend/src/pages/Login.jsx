@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useLocation, Link } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -192,9 +192,7 @@ export default function Login() {
               </CardContent>
             </Card>
 
-            <p className="mt-5 text-center font-label text-[10px] text-muted-foreground">
-              <Link to="/login" className="underline">HOME</Link>
-            </p>
+
           </div>
         </div>
       </div>
