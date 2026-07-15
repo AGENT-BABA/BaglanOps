@@ -1,64 +1,8 @@
-/* NetOps Service Worker · v3
- * Enables install as PWA + offline fallback support.
- * Handles FCM push notifications + forwarded in-app notifications.
+/* NetOps Service Worker · v4
+ * Minimal SW — handles FCM push notifications only.
+ * No caching, no fetch interception, no clients.claim().
+ * Caching is handled by the browser natively.
  */
-const CACHE = "netops-v3";
-const APP_SHELL = ["/", "/index.html", "/manifest.json", "/icon-192.png", "/icon-512.png", "/offline.html"];
-
-self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(CACHE).then((c) => c.addAll(APP_SHELL).catch(() => null)));
-});
-
-self.addEventListener("activate", (event) => {
-  event.waitUntil(
-    caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
-  );
-  self.clients.claim();
-});
-
-// Simple network-first for API, cache-first for shell
-self.addEventListener("fetch", (event) => {
-  const req = event.request;
-  if (req.method !== "GET") return;
-  const url = new URL(req.url);
-  // API requests: network-first, fallback to cache
-  if (url.pathname.startsWith("/api/")) {
-    event.respondWith(fetch(req).catch(() => caches.match(req)));
-    return;
-  }
-  // Navigation requests: network-first, fallback to offline page
-  if (req.mode === "navigate") {
-    event.respondWith(
-      fetch(req)
-        .then((r) => {
-          if (r && r.ok) {
-            const copy = r.clone();
-            caches.open(CACHE).then((c) => c.put(req, copy));
-          }
-          return r;
-        })
-        .catch(() =>
-          caches.match("/offline.html").then((r) => r || new Response("Offline", { status: 503, headers: { "Content-Type": "text/plain" } }))
-        )
-    );
-    return;
-  }
-  // Other requests: cache-first, fallback to network
-  event.respondWith(
-    caches.match(req).then((cached) =>
-      cached ||
-      fetch(req)
-        .then((r) => {
-          if (r && r.ok && url.origin === location.origin) {
-            const copy = r.clone();
-            caches.open(CACHE).then((c) => c.put(req, copy));
-          }
-          return r;
-        })
-        .catch(() => cached)
-    )
-  );
-});
 
 // FCM push notifications — fired when app is closed/backgrounded
 self.addEventListener("push", (event) => {
