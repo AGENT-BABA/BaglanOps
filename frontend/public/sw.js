@@ -7,7 +7,6 @@ const APP_SHELL = ["/", "/index.html", "/manifest.json", "/icon-192.png", "/icon
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((c) => c.addAll(APP_SHELL).catch(() => null)));
-  self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
