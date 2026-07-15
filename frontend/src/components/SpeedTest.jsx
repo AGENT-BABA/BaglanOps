@@ -129,7 +129,7 @@ export default function SpeedTest({ onClose }) {
         {status === "idle" && (
           <div className="text-center">
             <p className="text-sm text-muted-foreground mb-4">
-              Test your connection speed to the NetOps server.
+              Test your connection speed to the BaglanOps server.
             </p>
             <Button onClick={runTest} className="gap-2" data-testid="speedtest-start">
               <Zap className="h-4 w-4" /> Start Speed Test

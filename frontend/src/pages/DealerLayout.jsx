@@ -10,5 +10,5 @@ const NAV = [
 ];
 
 export default function DealerLayout() {
-  return <AppShell brand="NetOps" roleLabel="DEALER · OPS" nav={NAV} />;
+  return <AppShell brand="BaglanOps" roleLabel="DEALER · OPS" nav={NAV} />;
 }

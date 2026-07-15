@@ -76,7 +76,7 @@ export default function Login() {
           <div className="grid h-9 w-9 place-items-center rounded-md border border-primary/40 bg-primary/10">
             <Radio className="h-4 w-4 text-primary" />
           </div>
-          <span className="font-display text-xl font-semibold">NetOps</span>
+          <span className="font-display text-xl font-semibold">BaglanOps</span>
           <span className="font-label text-[10px] text-muted-foreground">/ COMMAND</span>
         </div>
         <div className="relative z-10 space-y-6">
@@ -102,7 +102,7 @@ export default function Login() {
           </div>
         </div>
         <div className="relative z-10 font-label text-[10px] text-muted-foreground">
-          © NETOPS · SECURE JWT SESSION · 24H
+          © BAGLANOPS · SECURE JWT SESSION · 24H
         </div>
       </div>
 
@@ -113,7 +113,7 @@ export default function Login() {
             <div className="grid h-8 w-8 place-items-center rounded-md border border-primary/40 bg-primary/10">
               <Radio className="h-4 w-4 text-primary" />
             </div>
-            <span className="font-display text-lg font-semibold">NetOps</span>
+            <span className="font-display text-lg font-semibold">BaglanOps</span>
           </div>
           <div className="ml-auto"><ThemeToggle /></div>
         </div>

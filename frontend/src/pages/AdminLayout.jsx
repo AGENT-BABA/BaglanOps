@@ -10,5 +10,5 @@ const NAV = [
 ];
 
 export default function AdminLayout() {
-  return <AppShell brand="NetOps" roleLabel="SYSTEM · ADMIN" nav={NAV} />;
+  return <AppShell brand="BaglanOps" roleLabel="SYSTEM · ADMIN" nav={NAV} />;
 }

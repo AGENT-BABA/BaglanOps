@@ -147,7 +147,7 @@ async def log_action(user: dict, action: str, detail: str = "", request: Request
     }
     await db.audit_logs.insert_one(doc)
 
-app = FastAPI(title="NetOps Dealer Portal v2")
+app = FastAPI(title="BaglanOps Dealer Portal v2")
 api = APIRouter(prefix="/api")
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("netops")
@@ -527,7 +527,7 @@ async def admin_monthly_pdf(month: str = Query(..., description="YYYY-MM"), _: d
 
     title_style = ParagraphStyle("Title2", parent=styles["Title"], fontSize=18, spaceAfter=6)
     subtitle_style = ParagraphStyle("Sub", parent=styles["Normal"], fontSize=10, textColor=colors.grey, spaceAfter=12)
-    elements.append(Paragraph(f"NetOps — Monthly Health Report", title_style))
+    elements.append(Paragraph(f"BaglanOps — Monthly Health Report", title_style))
     elements.append(Paragraph(f"Period: {month} &nbsp;|&nbsp; Generated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}", subtitle_style))
 
     if not reports:

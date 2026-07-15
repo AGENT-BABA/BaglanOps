@@ -34,7 +34,7 @@ export function AppShell({ brand, roleLabel, nav, children }) {
       const firstLoaded = localStorage.getItem(firstLoadMarker) === "1";
       if (firstLoaded) {
         fresh.forEach((n) => {
-          notify({ title: n.title || "NetOps", body: n.message || "", tag: n.id });
+          notify({ title: n.title || "BaglanOps", body: n.message || "", tag: n.id });
         });
       } else {
         localStorage.setItem(firstLoadMarker, "1");

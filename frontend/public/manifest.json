@@ -1,6 +1,6 @@
 {
-  "name": "NetOps · ISP Dealer Portal",
-  "short_name": "NetOps",
+  "name": "BaglanOps · ISP Dealer Portal",
+  "short_name": "BaglanOps",
   "description": "ISP maintenance & monitoring dashboard for dealers, workers and clients",
   "start_url": "/",
   "scope": "/",

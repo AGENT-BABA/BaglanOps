@@ -1,4 +1,4 @@
-# NetOps — ISP Dealer Maintenance & Monitoring Portal
+# BaglanOps — ISP Dealer Maintenance & Monitoring Portal
 
 Full-stack portal for ISPs to manage dealers, workers, clients, and PPPoE connections with real-time monitoring via MikroTik RouterOS API.
 

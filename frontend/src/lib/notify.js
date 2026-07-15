@@ -43,7 +43,7 @@ export async function notify({ title, body, tag, data }) {
   try {
     const reg = swReg || (await navigator.serviceWorker?.ready);
     if (reg && reg.showNotification) {
-      await reg.showNotification(title || "NetOps", {
+      await reg.showNotification(title || "BaglanOps", {
         body: body || "",
         icon: "/icon-192.png",
         badge: "/icon-192.png",
@@ -56,7 +56,7 @@ export async function notify({ title, body, tag, data }) {
   } catch (err) {
     console.warn("SW notify failed, falling back", err);
   }
-  try { new Notification(title || "NetOps", { body: body || "", icon: "/icon-192.png", tag }); } catch (err) {
+  try { new Notification(title || "BaglanOps", { body: body || "", icon: "/icon-192.png", tag }); } catch (err) {
     console.warn("Notification fallback failed", err);
   }
 }

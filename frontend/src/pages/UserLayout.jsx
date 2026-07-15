@@ -29,7 +29,7 @@ export default function UserLayout() {
       const fresh = data.filter((n) => !seen.has(n.id) && !n.read);
       const firstLoadMarker = seenKey(user?.id) + "_first";
       if (localStorage.getItem(firstLoadMarker) === "1") {
-        fresh.forEach((n) => notify({ title: n.title || "NetOps", body: n.message || "", tag: n.id }));
+        fresh.forEach((n) => notify({ title: n.title || "BaglanOps", body: n.message || "", tag: n.id }));
       } else {
         localStorage.setItem(firstLoadMarker, "1");
       }
@@ -73,7 +73,7 @@ export default function UserLayout() {
               <Radio className="h-4 w-4 text-primary" />
             </div>
             <div>
-              <div className="font-display text-base font-semibold leading-none">NetOps</div>
+              <div className="font-display text-base font-semibold leading-none">BaglanOps</div>
               <div className="font-label text-[9px] text-muted-foreground">CLIENT PORTAL</div>
             </div>
           </div>

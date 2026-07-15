@@ -6,5 +6,5 @@ const NAV = [
 ];
 
 export default function WorkerLayout() {
-  return <AppShell brand="NetOps" roleLabel="MAINTENANCE · WORKER" nav={NAV} />;
+  return <AppShell brand="BaglanOps" roleLabel="MAINTENANCE · WORKER" nav={NAV} />;
 }

@@ -1,4 +1,4 @@
-/* NetOps Service Worker · v4
+/* BaglanOps Service Worker · v4
  * Minimal SW — handles FCM push notifications only.
  * No caching, no fetch interception, no clients.claim().
  * Caching is handled by the browser natively.
@@ -11,10 +11,10 @@ self.addEventListener("push", (event) => {
   try {
     payload = event.data.json();
   } catch {
-    payload = { notification: { title: "NetOps", body: event.data.text() } };
+    payload = { notification: { title: "BaglanOps", body: event.data.text() } };
   }
 
-  const title = payload.notification?.title || payload.data?.title || "NetOps";
+  const title = payload.notification?.title || payload.data?.title || "BaglanOps";
   const body = payload.notification?.body || payload.data?.body || "";
   const tag = payload.notification?.tag || payload.data?.tag || "netops-push";
 
@@ -34,7 +34,7 @@ self.addEventListener("push", (event) => {
 self.addEventListener("message", (event) => {
   const msg = event.data || {};
   if (msg.type === "notify") {
-    self.registration.showNotification(msg.title || "NetOps", {
+    self.registration.showNotification(msg.title || "BaglanOps", {
       body: msg.body || "",
       icon: "/icon-192.png",
       badge: "/icon-192.png",
