@@ -4,7 +4,6 @@
  */
 import { initializeApp } from "firebase/app";
 import { getMessaging, getToken } from "firebase/messaging";
-import { api } from "@/lib/api";
 import { NOTIF_ENABLED_KEY } from "@/lib/notify";
 
 const firebaseConfig = {
@@ -17,6 +16,7 @@ const firebaseConfig = {
 };
 
 const VAPID_KEY = process.env.REACT_APP_FIREBASE_VAPID_KEY;
+const API_BASE = process.env.REACT_APP_BACKEND_URL + "/api";
 
 let messaging = null;
 
@@ -26,41 +26,47 @@ function isFirebaseConfigured() {
 
 export async function initFCM() {
   try {
-    if (!isFirebaseConfigured()) {
-      console.warn("FCM: Firebase config missing, skipping FCM init");
-      return null;
-    }
-
+    if (!isFirebaseConfigured()) return null;
     if (typeof window === "undefined" || !("serviceWorker" in navigator)) return null;
-
     if (Notification.permission !== "granted") return null;
     if (localStorage.getItem(NOTIF_ENABLED_KEY) === "off") return null;
+
+    const token = localStorage.getItem("netops_token");
+    if (!token) return null;
 
     const app = initializeApp(firebaseConfig);
     messaging = getMessaging(app);
 
     const registration = await navigator.serviceWorker.ready;
-    const token = await getToken(messaging, { vapidKey: VAPID_KEY, serviceWorkerRegistration: registration });
+    const fcmToken = await getToken(messaging, { vapidKey: VAPID_KEY, serviceWorkerRegistration: registration });
 
-    if (token) {
-      await saveFCMToken(token);
+    if (fcmToken) {
+      await saveFCMToken(fcmToken, token);
     }
 
-    return token;
+    return fcmToken;
   } catch (err) {
     console.error("FCM init failed:", err);
     return null;
   }
 }
 
-export async function saveFCMToken(token) {
+async function saveFCMToken(fcmToken, authToken) {
   try {
-    await api.post("/user/fcm-token", { token });
+    await fetch(`${API_BASE}/user/fcm-token`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${authToken}`,
+      },
+      body: JSON.stringify({ token: fcmToken }),
+    });
   } catch (err) {
     console.error("Failed to save FCM token:", err);
   }
 }
 
 export function getFCMToken() {
+  if (!messaging) return Promise.resolve(null);
   return getToken(messaging, { vapidKey: VAPID_KEY }).catch(() => null);
 }
