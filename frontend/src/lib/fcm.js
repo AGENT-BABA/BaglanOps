@@ -39,7 +39,8 @@ export async function initFCM() {
     const app = initializeApp(firebaseConfig);
     messaging = getMessaging(app);
 
-    const token = await getToken(messaging, { vapidKey: VAPID_KEY });
+    const registration = await navigator.serviceWorker.register("/sw.js");
+    const token = await getToken(messaging, { vapidKey: VAPID_KEY, serviceWorkerRegistration: registration });
 
     if (token) {
       await saveFCMToken(token);
